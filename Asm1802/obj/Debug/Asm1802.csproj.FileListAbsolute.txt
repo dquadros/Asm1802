@@ -1,0 +1,5 @@
+C:\Particular\git\Asm1802\Asm1802\bin\Debug\Asm1802.exe
+C:\Particular\git\Asm1802\Asm1802\bin\Debug\Asm1802.pdb
+C:\Particular\git\Asm1802\Asm1802\obj\Debug\ResolveAssemblyReference.cache
+C:\Particular\git\Asm1802\Asm1802\obj\Debug\Asm1802.exe
+C:\Particular\git\Asm1802\Asm1802\obj\Debug\Asm1802.pdb

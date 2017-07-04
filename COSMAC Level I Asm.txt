@@ -1,0 +1,168 @@
+COSMAC Level I Assembly Language
+--------------------------------
+
+Source: Operator Manual for the RCA COSMAC Development System II
+
+
+Line and Comments
+- A line consistes of zero or more statements, optionally followed by a comment
+- Multiple statements are separeted by semicolons (;)
+- Comments starts with two periods (..)
+- Spaces betweem tokens are ignored
+
+Constants
+- hexadecimal: #h..h or X'h..h' where h is an hex digit
+  CRA (COSMAC Resident Assembler) requires an even number of digits
+  hex numbers are truncated to 16 bits
+- decimal: d..d or D'dd' where d is a decimal digit
+  decimal numbers are truncated to 16 bits
+- binary B'b..b' where b is a binary digit
+  binary numbers are truncated to 8 bits
+- text T'c..c' whre c is a printable caracter
+  '' inside a constant equals '
+
+Basic Expressions
+- evaluate to 16 bits
+- constant
+- symbol
+- symbol + constant
+- symbol - constant
+
+Expression
+- expr
+- A(expr)
+  equal to expr, result in 16 bits
+- A.1(expr)
+  returns most significant byte
+- A.0(expr)
+  returns least significant byte
+
+Datalist
+- expr[, expr[, expr...]]
+- uses lower 8 bits of expressions
+
+Statement
+- [Label:] [Mnemonic [operand] [datalist]] [,datalist]
+
+Symbols
+
+- labels at the beginning of a intruction
+- SYMBOL = expression
+- * location counter at the beginning of the statement
+
+Operand: 
+- if used, always one expression
+- register (reg): least 4 bits are used
+- I/O device (io): least 4 bits are used, error if 0 or > 7
+- branch address
+  short (sa): uses lower byte, upper byte should be same as location counter
+  long (la): uses 16 bit
+- imediate (imed): uses lower byte
+
+Directives
+- DC datalist
+  define constant
+- ORG expr
+  sets location counter to expression
+- PAGE
+  moves location counter to the begining of next page
+  * = ((* >> 8)+1) << 8
+- END
+  end of the code to assemble
+
+Instructions
+- register
+  INC reg    1N
+  DEC reg    2N
+  IRX        60
+  GLO reg    8N
+  PLO reg    AN
+  GHI reg    9N
+  PHI reg    BN
+- memory
+  LDN reg    0N  (N cannot be zero)
+  LDA reg    4N
+  LDX        F0
+  LDXA       72
+  LDI        F8
+  STR reg    5N
+  STXD       73
+- logic
+  OR         F1
+  ORI        F9
+  XOR        F3
+  XRI        FB
+  AND        F2
+  ANI        FA
+  SHR        F6
+  SHRC       76
+  RSHR       76
+  SHL        FE
+  SHLC       7E
+  RSHL       7E
+Aritmetic
+  ADD        F4
+  ADI        FC
+  ADC        74
+  ACDI       7C
+  SD         F5
+  SDI        FD
+  SDB        75
+  SDBI       7D
+  SM         F7
+  SMI        FF
+  SMB        77
+  SMBI       7F
+Short Branch
+  BR   sa    30
+  NBR  sa    38
+  BZ   sa    32
+  BNZ  sa    3A
+  BDF  sa    33
+  BPZ  sa    33
+  BGE  sa    33
+  BNF  sa    3B
+  BM   sa    3B
+  BL   sa    3B
+  BQ   sa    31
+  BNQ  sa    39
+  B1   sa    34
+  BN1  sa    3C
+  B2   sa    35
+  BN2  sa    3D
+  B3   sa    36
+  BN3  sa    3E
+  B4   sa    37
+  BN4  sa    3F
+Long Branch
+  LBR  la    C0
+  NLBR la    C8
+  LBZ  la    C2
+  LBNZ la    CA
+  LBDF la    C3
+  LBNF la    CB
+  LBQ  la    C1
+  LBNQ la    C9
+Skip
+  SKP        38
+  LSKP       C8
+  LSZ        CE
+  LSNZ       C6
+  LSDF       CF
+  LSNF       C7
+  LSQ        CD
+  LSNQ       C5
+  LSIE       CC
+Control
+  IDLE       00
+  NOP        C4
+  SEP reg    DN
+  SEX reg    EN
+  SEQ        7B
+  REQ        7A
+  SAV        78
+  MARK       79
+  RET        70
+  DIS        71
+  OUT io     6I  (I = io) 
+  INP io     6I  (I = io+8)
