@@ -6,12 +6,13 @@ Source: Operator Manual for the RCA COSMAC Development System II
 
 Line and Comments
 - A line consistes of zero or more statements, optionally followed by a comment
-- Multiple statements are separeted by semicolons (;)
+- Multiple statements are (optionaly) separeted by semicolons (;)
 - Comments starts with two periods (..)
 - Spaces betweem tokens are ignored
 
 Constants
 - hexadecimal: #h..h or X'h..h' where h is an hex digit
+  also h..h if first digit is A to F
   CRA (COSMAC Resident Assembler) requires an even number of digits
   hex numbers are truncated to 16 bits
 - decimal: d..d or D'dd' where d is a decimal digit
@@ -21,7 +22,7 @@ Constants
 - text T'c..c' whre c is a printable caracter
   '' inside a constant equals '
 
-Basic Expressions
+Basic Expressions (expr)
 - evaluate to 16 bits
 - constant
 - symbol
@@ -53,6 +54,7 @@ Symbols
 Operand: 
 - if used, always one expression
 - register (reg): least 4 bits are used
+  also Rn where n is 0 to F 
 - I/O device (io): least 4 bits are used, error if 0 or > 7
 - branch address
   short (sa): uses lower byte, upper byte should be same as location counter
@@ -166,3 +168,36 @@ Control
   DIS        71
   OUT io     6I  (I = io) 
   INP io     6I  (I = io+8)
+
+-=-=-=-=-=-=-=
+
+Line parser
+
+(1) skip spaces and ';', finish if end of line
+(2) if '.'
+    next must be a '.'
+    finish
+(3) if ',' 
+    parse datalist
+    goto (1)
+(4) if not alpha: error
+(5) extract token
+(6) skip spaces
+(7) if '='
+    skip spaces
+    parse expression
+    save symbol
+    goto (1)
+(8) if ':'
+    save symbol
+    skip spaces, finish if end of line
+    extract token
+(9) token is directive
+    DC   -> parse datalist, goto (1)
+    ORG  -> parse expression, update pc, goto (1)
+    PAGE -> update pc, goto (1)
+    END  -> finish pass
+(10) token is instruction
+     parse operand
+     goto (1)
+(11) error

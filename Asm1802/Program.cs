@@ -22,11 +22,9 @@ namespace Asm1802
     class Program
     {
         static string SourceFile;       // source file name
-        static SymbolTable symtab;          // symbol table
+        static SymbolTable symtab;      // symbol table
         static string[] source;         // source file in memory
         static List<Statement> lstSt;   // parsed source file
-        static UInt16 pc;               // location counter
-
 
         // Program entry point
         static void Main(string[] args)
@@ -97,23 +95,22 @@ namespace Asm1802
         // The first pass main objetive is to create the symbol table
         static void Pass1()
         {
-            pc = 0;
+            UInt16 pc = 0;          // location counter
+            int sline = 1;          // current source line
+            bool ended = false;
+
             foreach (string line in source)
             {
-                List<string> parts = Statement.Split(line);
-                foreach (string s in parts)
+                for (int pos = 0; !ended && (pos < line.Length); )
                 {
-                    Statement st = Statement.Parse(s);
-                    if (st.Type == Statement.StType.ERROR)
-                    {
-                    }
-                    else 
+                    Statement st = Statement.Parse(line, sline, ref pos);
+                    if (st.Type != Statement.StType.ERROR)
                     {
                         if (st.Label != "")
                         {
                             if (symtab.Lookup(st.Label) != null)
                             {
-                                Console.Out.WriteLine("Duplicate symbol: " + st.Label);
+                                st.Error = Statement.StError.DUP_SYM;
                             }
                             else
                             {
@@ -124,9 +121,14 @@ namespace Asm1802
                         {
                             pc = st.Value;
                         }
+                        else if (st.Type == Statement.StType.PAGE)
+                        {
+                            // Advance PC to start of next page
+                            pc = (UInt16) ((pc + 0x100) & 0xFF00);
+                        }
                         else if (st.Type == Statement.StType.END)
                         {
-                            break;  // ignore lines after END
+                            ended = true;   // ignote lines after END
                         }
                         else
                         {
@@ -134,15 +136,22 @@ namespace Asm1802
                         }
                     }
                 }
+                if (ended)
+                {
+                    break;
+                }
+                sline++;
+            }
+            if (!ended)
+            {
+                Console.Out.WriteLine("Missing END directive");
             }
         }
-
 
         // Second Pass
         // The second pass will create the object code
         static void Pass2()
         {
-            pc = 0;
         }
 
         // Prints information about the program
