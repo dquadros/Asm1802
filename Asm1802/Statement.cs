@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Asm1802
 {
@@ -19,17 +20,17 @@ namespace Asm1802
         // Token types
         public enum TokenType 
         { 
-            LABEL,      // la..a:
-            SYMBOL,     // la..a in symbol table
-            DIRECTIVE,  // la..a
-            INSTRUCT,   // la..a
-            REG,        // Rh
-            TEXT,       // la..a
+            ERROR,
+            EMPTY,      // no token
             STRING,     // T'c..c'
             BCONST,     // B'b..b'
-            DCONST,     // D'd..d' or d..d
             HCONST,     // #h..h or X'h..h' or h..h
-            ERROR 
+            DCONST,     // D'd..d' or d..d
+            TEXT,       // la..a will be classified latter in the following types
+            SYMBOL,     // la..a in symbol table
+            REG,        // Rh
+            DIRECTIVE,  // la..a
+            INSTRUCT    // la..a
         };
 
         private TokenType _type;
@@ -61,15 +62,182 @@ namespace Asm1802
         public static Token Parse(string line, ref int pos)
         {
             StringBuilder sbText = new StringBuilder();
+            Token tk = new Token(TokenType.EMPTY, "");
+            bool insideQuotes = false;
 
+            // Extract token text
             while (pos < line.Length)
             {
-                if (Char.IsWhiteSpace(line[pos]))
+                Char c = line[pos++];
+                if (insideQuotes && (line[pos] == '\''))
                 {
+                    if ((pos < line.Length) && (line[pos] == '\''))
+                    {
+                        // '' -> '
+                        sbText.Append(c);
+                        pos++;
+                        continue;
+                    }
+                    else
+                    {
+                        insideQuotes = false;
+                        break;
+                    }
+                }
+                if (insideQuotes)
+                {
+                    sbText.Append(c);
+                }
+                else if (c == '\'')
+                {
+                    sbText.Append(c);
+                    insideQuotes = true;
+                }
+                else if (Char.IsLetterOrDigit(c) || (c == '#'))
+                {
+                    sbText.Append(c);
+                }
+                else
+                {
+                    break;
                 }
             }
+            tk._text = sbText.ToString();
+            if (insideQuotes)
+            {
+                tk._type = TokenType.ERROR;
+                tk._error = Statement.StError.MISSING_QUOTE;
+                return tk;
+            }
 
-            return new Token(TokenType.TEXT, "");
+            // Found out what kind of token
+            if (tk.Text.Length == 0)
+            {
+                return tk;
+            }
+            if (tk.Text[0] == '#')
+            {
+                tk.CheckHex(1);
+            }
+            else if (Char.IsLetter(tk.Text[0]))
+            {
+                tk._text = tk.Text.ToUpper();
+                if ((tk.Text.Length > 1) && (tk.Text[1] == '\''))
+                {
+                    switch (tk.Text[0])
+                    {
+                        case 'B':
+                            tk.CheckBin();
+                            break;
+                        case 'D':
+                            tk.CheckDec(2);
+                            break;
+                        case 'T':
+                            tk.CheckString();
+                            break;
+                        case 'X':
+                            tk.CheckHex(2);
+                            break;
+                        default:
+                            tk._type = TokenType.ERROR;
+                            tk._error = Statement.StError.INV_SYNTAX;
+                            break;
+                    }
+                }
+                else
+                {
+                    tk.CheckAlpha();
+                }
+            }
+            else
+            {
+                // Must be a decimal number
+                tk.CheckDec(0);
+            }
+
+            return tk;
+        }
+
+        // Check that token has only alphanumeric chars
+        private void CheckAlpha()
+        {
+            Regex rx = new Regex("^[0-9A-Z]+$");
+            if (rx.Match(Text).Success)
+            {
+                _type = TokenType.TEXT;
+            }
+            else
+            {
+                _type = TokenType.ERROR;
+                _error = Statement.StError.INV_SYNTAX;
+            }
+        }
+
+        // Check if valid binary contant
+        private void CheckBin()
+        {
+            Regex rx = new Regex("^B\'[01]{1,8}$");
+            if (rx.Match(Text).Success)
+            {
+                _type = TokenType.BCONST;
+                _text = Text.Substring(2);
+            }
+            else
+            {
+                _type = TokenType.ERROR;
+                _error = Statement.StError.INV_BCONST;
+            }
+        }
+
+        // Check if valid decimal contant
+        private void CheckHex(int start)
+        {
+            Regex rx = new Regex("^[0-9A-F]{1,4}$");
+            string txt = Text.Substring(start);
+            if (rx.Match(txt).Success)
+            {
+                _type = TokenType.HCONST;
+                _text = txt;
+            }
+            else
+            {
+                _type = TokenType.ERROR;
+                _error = Statement.StError.INV_HCONST;
+            }
+        }
+
+        // Check if valid hexdecimal contant
+        private void CheckDec(int start)
+        {
+            Regex rx = new Regex("^[0-9]{1,5}$");
+            string txt = Text.Substring(start);
+            if (rx.Match(txt).Success && (Int32.Parse(txt) <= 0xFFFF))
+            {
+                _type = TokenType.DCONST;
+                _text = txt;
+            }
+            else
+            {
+                _type = TokenType.ERROR;
+                _error = Statement.StError.INV_DCONST;
+            }
+        }
+
+        // Check if valid string
+        private void CheckString()
+        {
+            if (Text.Length > 2)
+            {
+                // T'xxx
+                _type = TokenType.STRING;
+                _text = Text.Substring(2);
+            }
+            else
+            {
+                // T'
+                _type = TokenType.ERROR;
+                _error = Statement.StError.MISSING_QUOTE;
+            }
         }
 
     }
@@ -96,7 +264,9 @@ namespace Asm1802
             BAD_START,      // Invalid char at start of statement
             INV_BRANCH,     // Branch out of page
             INV_REG,        // Invalid register number
-            INV_DEV         // Invalid device number
+            INV_DEV,        // Invalid device number
+            INV_DCONST,     // Invalid decimal constant
+            INV_SYNTAX      // Anything else we cannot accept
         };
 
         // This fields are determined in the first pass
@@ -198,8 +368,9 @@ namespace Asm1802
             {
                 st._type = StType.ERROR;
                 st._error = StError.BAD_START;
+                return st;
             }
-
+            Token tk1 = Token.Parse(text, ref pos);
 
 
             return st;
