@@ -21,10 +21,12 @@ namespace Asm1802
 {
     class Program
     {
-        static string SourceFile;       // source file name
-        static SymbolTable symtab;      // symbol table
-        static string[] source;         // source file in memory
-        static List<Statement> lstSt;   // parsed source file
+        static string SourceFile;           // source file name
+        static string[] source;             // source file in memory
+        static List<Statement> lstSt;       // parsed source file
+
+        public static SymbolTable symtab;   // symbol table
+        public static UInt16 pc;            // location counter
 
         // Program entry point
         static void Main(string[] args)
@@ -95,9 +97,9 @@ namespace Asm1802
         // The first pass main objetive is to create the symbol table
         static void Pass1()
         {
-            UInt16 pc = 0;          // location counter
             int sline = 1;          // current source line
             bool ended = false;
+            pc = 0;
 
             foreach (string line in source)
             {
@@ -111,6 +113,11 @@ namespace Asm1802
                             if (symtab.Lookup(st.Label) != null)
                             {
                                 st.Error = Statement.StError.DUP_SYM;
+                            }
+                            else if (st.Type == Statement.StType.EQU)
+                            {
+                                symtab.Add(st.Label, st.Value);
+                                continue;
                             }
                             else
                             {

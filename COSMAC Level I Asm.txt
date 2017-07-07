@@ -102,7 +102,7 @@ Instructions
   SHL        FE
   SHLC       7E
   RSHL       7E
-Aritmetic
+Arithmetic
   ADD        F4
   ADI        FC
   ADC        74
@@ -191,7 +191,10 @@ Line parser
 (8) if ':'
     save symbol
     skip spaces, finish if end of line
-    extract token
+    (a) if ',' 
+        parse datalist
+        goto (1)
+    (b) extract token
 (9) token is directive
     DC   -> parse datalist, goto (1)
     ORG  -> parse expression, update pc, goto (1)
