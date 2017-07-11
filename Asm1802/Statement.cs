@@ -146,22 +146,13 @@ namespace Asm1802
                 st.Error = StError.BAD_START;
                 return st;
             }
-            while ((pos < text.Length) && Char.IsWhiteSpace(text[pos]))
-            {
-                pos++;
-            }
             if (pos < text.Length)
             {
-                if (text[pos] == '=')
+                if (text[pos] == ':')
                 {
-                    st._type = StType.EQU;
+                    // Label
                     st._label = tk1.Text;
-                    st.EvalExpr(text, ref pos);
-                    return st;
-                }
-                else if (text[pos] == ':')
-                {
-                    st._label = tk1.Text;
+                    pos++;
                     while ((pos < text.Length) && Char.IsWhiteSpace(text[pos]))
                     {
                         pos++;
@@ -171,11 +162,13 @@ namespace Asm1802
                         st._type = StType.NOP;
                         return st;
                     }
+                    // Check what is next
                     if (text[pos] == ',')
                     {
+                        pos++;
                         st.ParseDatalist(text, ref pos);
                         return st;
-                    } 
+                    }
                     tk1 = Token.Parse(text, ref pos);
                     if (tk1.Type != Token.TokenType.TEXT)
                     {
@@ -183,8 +176,54 @@ namespace Asm1802
                         return st;
                     }
                 }
+                else
+                {
+                    while ((pos < text.Length) && Char.IsWhiteSpace(text[pos]))
+                    {
+                        pos++;
+                    }
+                    if ((pos < text.Length) && (text[pos] == '='))
+                    {
+                        pos++;
+                        st._type = StType.EQU;
+                        st._label = tk1.Text;
+                        st.EvalExpr(text, ref pos);
+                        return st;
+                    }
+                }
             }
 
+            while ((pos < text.Length) && Char.IsWhiteSpace(text[pos]))
+            {
+                pos++;
+            }
+            if (tk1.Text == "DC")
+            {
+                st._type = StType.DC;
+            }
+            else if (tk1.Text == "END")
+            {
+                st._type = StType.END;
+            }
+            else if (tk1.Text == "ORG")
+            {
+                st._type = StType.ORG;
+            }
+            else if (tk1.Text == "PAGE")
+            {
+                st._type = StType.PAGE;
+            }
+            else
+            {
+                Instruction inst = InstrTable.Lookup(tk1.Text);
+                if (inst == null)
+                {
+                    st.Error = StError.INV_MNE;
+                    return st;
+                }
+                st._type = StType.INSTR;
+                st._size = inst.Size;
+            }
 
             return st;
         }
@@ -198,8 +237,7 @@ namespace Asm1802
         private bool EvalExpr(string text, ref int pos)
         {
             _value = 0;
-            Error = StError.MISSING_EXPR;
-            return false;
+            return true;
         }
 
         // Generates object code (Pass2)

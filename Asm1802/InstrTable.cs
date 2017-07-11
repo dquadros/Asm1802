@@ -51,14 +51,14 @@ namespace Asm1802
 
         // Number of bytes to generate
         // does not include value passed through a datalist
-        private int _size;
-        public int Size
+        private UInt16 _size;
+        public UInt16 Size
         {
             get { return _size; }
         }
 
         // Constructor
-        public Instruction(byte op, OperType oper, bool d, int s)
+        public Instruction(byte op, OperType oper, bool d, UInt16 s)
         {
             _opcode = op;
             _operand = oper;
@@ -112,7 +112,7 @@ namespace Asm1802
             // Arithmetic instructions
             it.Add("ADD",  new Instruction(0xF4, OperType.NONE, false, 1));
             it.Add("ADI",  new Instruction(0xFC, OperType.NONE, true, 1));
-            it.Add("ADD",  new Instruction(0x74, OperType.NONE, false, 1));
+            it.Add("ADC",  new Instruction(0x74, OperType.NONE, false, 1));
             it.Add("ADCI", new Instruction(0x7C, OperType.NONE, true, 1));
             it.Add("SD",   new Instruction(0xF5, OperType.NONE, false, 1));
             it.Add("SDI",  new Instruction(0xFD, OperType.NONE, true, 1));
@@ -123,61 +123,77 @@ namespace Asm1802
             it.Add("SMB",  new Instruction(0x77, OperType.NONE, false, 1));
             it.Add("SMBI", new Instruction(0x7F, OperType.NONE, true, 1));
 
-            /*
-Short Branch
-  BR   sa    30
-  NBR  sa    38
-  BZ   sa    32
-  BNZ  sa    3A
-  BDF  sa    33
-  BPZ  sa    33
-  BGE  sa    33
-  BNF  sa    3B
-  BM   sa    3B
-  BL   sa    3B
-  BQ   sa    31
-  BNQ  sa    39
-  B1   sa    34
-  BN1  sa    3C
-  B2   sa    35
-  BN2  sa    3D
-  B3   sa    36
-  BN3  sa    3E
-  B4   sa    37
-  BN4  sa    3F
-Long Branch
-  LBR  la    C0
-  NLBR la    C8
-  LBZ  la    C2
-  LBNZ la    CA
-  LBDF la    C3
-  LBNF la    CB
-  LBQ  la    C1
-  LBNQ la    C9
-Skip
-  SKP        38
-  LSKP       C8
-  LSZ        CE
-  LSNZ       C6
-  LSDF       CF
-  LSNF       C7
-  LSQ        CD
-  LSNQ       C5
-  LSIE       CC
-Control
-  IDLE       00
-  NOP        C4
-  SEP reg    DN
-  SEX reg    EN
-  SEQ        7B
-  REQ        7A
-  SAV        78
-  MARK       79
-  RET        70
-  DIS        71
-  OUT io     6I  (I = io) 
-  INP io     6I  (I = io+8)
-           */
+            // Short Branch
+            it.Add("BR",  new Instruction(0x30, OperType.SADDR, false, 2));
+            it.Add("NBR", new Instruction(0x38, OperType.NONE,  false, 1));
+            it.Add("BZ",  new Instruction(0x32, OperType.SADDR, false, 2));
+            it.Add("BNZ", new Instruction(0x3A, OperType.SADDR, false, 2));
+            it.Add("BDF", new Instruction(0x33, OperType.SADDR, false, 2));
+            it.Add("BPZ", new Instruction(0x33, OperType.SADDR, false, 2));
+            it.Add("BGE", new Instruction(0x33, OperType.SADDR, false, 2));
+            it.Add("BNF", new Instruction(0x3B, OperType.SADDR, false, 2));
+            it.Add("BM",  new Instruction(0x3B, OperType.SADDR, false, 2));
+            it.Add("BL",  new Instruction(0x3B, OperType.SADDR, false, 2));
+            it.Add("BQ",  new Instruction(0x31, OperType.SADDR, false, 2));
+            it.Add("BNQ", new Instruction(0x39, OperType.SADDR, false, 2));
+            it.Add("B1",  new Instruction(0x34, OperType.SADDR, false, 2));
+            it.Add("BN1", new Instruction(0x3C, OperType.SADDR, false, 2));
+            it.Add("B2",  new Instruction(0x35, OperType.SADDR, false, 2));
+            it.Add("BN2", new Instruction(0x3D, OperType.SADDR, false, 2));
+            it.Add("B3",  new Instruction(0x36, OperType.SADDR, false, 2));
+            it.Add("BN3", new Instruction(0x3E, OperType.SADDR, false, 2));
+            it.Add("B4",  new Instruction(0x37, OperType.SADDR, false, 2));
+            it.Add("BN4", new Instruction(0x3F, OperType.SADDR, false, 2));
+
+            // Long Branch
+            it.Add("LBR",  new Instruction(0xC0, OperType.LADDR, false, 3));
+            it.Add("NLBR", new Instruction(0xC8, OperType.LADDR, false, 3));
+            it.Add("LBZ",  new Instruction(0xC2, OperType.LADDR, false, 3));
+            it.Add("LBNZ", new Instruction(0xCA, OperType.LADDR, false, 3));
+            it.Add("LBDF", new Instruction(0xC3, OperType.LADDR, false, 3));
+            it.Add("LBNF", new Instruction(0xCB, OperType.LADDR, false, 3));
+            it.Add("LBQ",  new Instruction(0xC1, OperType.LADDR, false, 3));
+            it.Add("LBNQ", new Instruction(0xC9, OperType.LADDR, false, 3));
+
+            // Skip
+            it.Add("SKP",  new Instruction(0x38, OperType.NONE,  false, 1));
+            it.Add("LSKP", new Instruction(0xC8, OperType.NONE,  false, 1));
+            it.Add("LSZ",  new Instruction(0xCE, OperType.LADDR, false, 3));
+            it.Add("LSNZ", new Instruction(0xC6, OperType.LADDR, false, 3));
+            it.Add("LSDF", new Instruction(0xCF, OperType.LADDR, false, 3));
+            it.Add("LSNF", new Instruction(0xC7, OperType.LADDR, false, 3));
+            it.Add("LSQ",  new Instruction(0xCD, OperType.LADDR, false, 3));
+            it.Add("LSNQ", new Instruction(0xC5, OperType.LADDR, false, 3));
+            it.Add("LSIE", new Instruction(0xCC, OperType.LADDR, false, 3));
+
+            // Control
+            it.Add("IDLE", new Instruction(0x00, OperType.NONE, false, 1));
+            it.Add("NOP",  new Instruction(0xC4, OperType.NONE, false, 1));
+            it.Add("SEP",  new Instruction(0xD0, OperType.REG,  false, 1));
+            it.Add("SEX",  new Instruction(0xE0, OperType.REG,  false, 1));
+            it.Add("SEQ",  new Instruction(0x7B, OperType.NONE, false, 1));
+            it.Add("REQ",  new Instruction(0x7A, OperType.NONE, false, 1));
+            it.Add("SAV",  new Instruction(0x78, OperType.NONE, false, 1));
+            it.Add("MARK", new Instruction(0x79, OperType.NONE, false, 1));
+            it.Add("RET",  new Instruction(0x70, OperType.NONE, false, 1));
+            it.Add("DIS",  new Instruction(0x71, OperType.NONE, false, 1));
+            it.Add("OUT",  new Instruction(0x60, OperType.IODEV, false, 1));
+            it.Add("IN",   new Instruction(0x68, OperType.IODEV, false, 1));
         }
+
+        // Lookup an instruction
+        // return null if not found
+        public static Instruction Lookup(string name)
+        {
+            if (it.ContainsKey(name))
+            {
+                return it[name];
+            }
+            else
+            {
+                return null;
+            }
+        }
+
     }
 }

@@ -98,6 +98,7 @@ namespace Asm1802
                 }
                 else
                 {
+                    pos--;  // last char is not part of the token
                     break;
                 }
             }

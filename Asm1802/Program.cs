@@ -33,7 +33,7 @@ namespace Asm1802
         {
             try
             {
-                Console.Out.WriteLine("ASM81 v"+
+                Console.Out.WriteLine("ASM1802 v"+
                     Assembly.GetExecutingAssembly().GetName().Version.Major.ToString() + "." +
                     Assembly.GetExecutingAssembly().GetName().Version.Minor.ToString("D2"));
                 if (Init(args))

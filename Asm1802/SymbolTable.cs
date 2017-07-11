@@ -118,7 +118,8 @@ namespace Asm1802
             Console.Out.WriteLine("Symbol Table");
             foreach (KeyValuePair<string, Symbol> kvp in symtable)
             {
-                Console.Out.WriteLine(kvp.Value.ToString());
+                Console.Out.WriteLine(kvp.Value.Name + " " + 
+                    kvp.Value.Value.ToString());
             }
         }
 
