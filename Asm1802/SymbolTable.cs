@@ -63,7 +63,7 @@ namespace Asm1802
             if (HasValue)
             {
                 return Name.PadRight(NameLen, ' ').Substring(0, NameLen) + " " +
-                    Value.ToString("X4") + Value.ToString();
+                    Value.ToString("X4") + ' ' + Value.ToString().PadLeft(5);
             }
             else
             {
@@ -115,12 +115,16 @@ namespace Asm1802
         // Prints the symbol table to the console
         public void Print()
         {
+            Console.Out.WriteLine();
             Console.Out.WriteLine("Symbol Table");
+            Console.Out.WriteLine();
+            Console.Out.WriteLine("Symbol".PadRight(Symbol.NameLen, ' ') + 
+                " Hex    Dec");
             foreach (KeyValuePair<string, Symbol> kvp in symtable)
             {
-                Console.Out.WriteLine(kvp.Value.Name + " " + 
-                    kvp.Value.Value.ToString());
+                Console.Out.WriteLine(kvp.Value.ToString());
             }
+            Console.Out.WriteLine();
         }
 
     }

@@ -1,5 +1,5 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <StartArguments>test1.asm</StartArguments>
+    <StartArguments>test2.asm</StartArguments>
   </PropertyGroup>
 </Project>

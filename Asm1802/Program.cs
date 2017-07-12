@@ -106,7 +106,12 @@ namespace Asm1802
                 for (int pos = 0; !ended && (pos < line.Length); )
                 {
                     Statement st = Statement.Parse(line, sline, ref pos);
-                    if (st.Type != Statement.StType.ERROR)
+                    if (st.Type == Statement.StType.ERROR)
+                    {
+                        // ignore rest of line
+                        break;
+                    }
+                    else
                     {
                         if (st.Label != "")
                         {

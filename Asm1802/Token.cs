@@ -36,6 +36,7 @@ namespace Asm1802
         public TokenType Type
         {
             get { return _type; }
+            set { _type = value; }
         }
 
         private string _text;
@@ -68,7 +69,7 @@ namespace Asm1802
             while (pos < line.Length)
             {
                 Char c = line[pos++];
-                if (insideQuotes && (line[pos] == '\''))
+                if (insideQuotes && (c == '\''))
                 {
                     if ((pos < line.Length) && (line[pos] == '\''))
                     {
