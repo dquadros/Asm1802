@@ -23,13 +23,10 @@ namespace Asm1802
             EMPTY,      // no token
             STRING,     // T'c..c'
             BCONST,     // B'b..b'
-            HCONST,     // #h..h or X'h..h' or h..h
+            HCONST,     // #h..h or X'h..h'
             DCONST,     // D'd..d' or d..d
-            TEXT,       // la..a will be classified latter in the following types
-            SYMBOL,     // la..a in symbol table
-            REG,        // Rh
-            DIRECTIVE,  // la..a
-            INSTRUCT    // la..a
+            TEXT        // la..a will be classified latter as 
+                        //   symbol, register, directive, instruction or hex const
         };
 
         private TokenType _type;

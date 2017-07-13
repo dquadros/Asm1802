@@ -115,7 +115,6 @@ namespace Asm1802
         // Prints the symbol table to the console
         public void Print()
         {
-            Console.Out.WriteLine();
             Console.Out.WriteLine("Symbol Table");
             Console.Out.WriteLine();
             Console.Out.WriteLine("Symbol".PadRight(Symbol.NameLen, ' ') + 

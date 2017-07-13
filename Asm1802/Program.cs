@@ -21,12 +21,12 @@ namespace Asm1802
 {
     class Program
     {
-        static string SourceFile;           // source file name
-        static string[] source;             // source file in memory
-        static List<Statement> lstSt;       // parsed source file
-
+        private static string SourceFile;   // source file name
+        private static string[] source;     // source file in memory
         public static SymbolTable symtab;   // symbol table
         public static UInt16 pc;            // location counter
+        public static int pass;             // pass number
+        private static int errcount;        // number of errors in pass2
 
         // Program entry point
         static void Main(string[] args)
@@ -36,10 +36,12 @@ namespace Asm1802
                 Console.Out.WriteLine("ASM1802 v"+
                     Assembly.GetExecutingAssembly().GetName().Version.Major.ToString() + "." +
                     Assembly.GetExecutingAssembly().GetName().Version.Minor.ToString("D2"));
+                Console.Out.WriteLine("(C) 2017, Daniel Quadros https://dqsoft.blogspot.com");
+                Console.Out.WriteLine();
                 if (Init(args))
                 {
-                    Pass1();
-                    Pass2();
+                    Assemble(1);
+                    Assemble(2);
                     Info();
                 }
             }
@@ -71,6 +73,8 @@ namespace Asm1802
             // Create symbol table
             symtab = new SymbolTable();
 
+            errcount = 0;
+
             return true;
         }
 
@@ -93,44 +97,68 @@ namespace Asm1802
             return true;
         }
 
-        // First Pass
-        // The first pass main objetive is to create the symbol table
-        static void Pass1()
+        // Analise the loaded source code
+        static void Assemble(int p)
         {
             int sline = 1;          // current source line
             bool ended = false;
             pc = 0;
+            pass = p;
 
             foreach (string line in source)
             {
+                // parse statements in current line
+                List<string> lstErrors = new List<string>();
                 for (int pos = 0; !ended && (pos < line.Length); )
                 {
                     Statement st = Statement.Parse(line, sline, ref pos);
                     if (st.Type == Statement.StType.ERROR)
                     {
+                        if (pass == 2)
+                        {
+                            // record error
+                            lstErrors.Add(Statement.MsgError(st.Error) + " near column " + (pos + 1).ToString());
+                        }
+
                         // ignore rest of line
                         break;
                     }
                     else
                     {
-                        if (st.Label != "")
+                        // Treat symbol definitions
+                        if (st.Label != "") 
                         {
-                            if (symtab.Lookup(st.Label) != null)
+                            if (pass == 1)
                             {
-                                st.Error = Statement.StError.DUP_SYM;
-                            }
-                            else if (st.Type == Statement.StType.EQU)
-                            {
-                                symtab.Add(st.Label, st.Value);
-                                continue;
+                                if (symtab.Lookup(st.Label) != null)
+                                {
+                                    st.Error = Statement.StError.DUP_SYM;
+                                }
+                                else if (st.Type == Statement.StType.EQU)
+                                {
+                                    symtab.Add(st.Label, st.Value);
+                                    continue;   // that is all this statement
+                                }
+                                else
+                                {
+                                    symtab.Add(st.Label, pc);
+                                }
                             }
                             else
                             {
-                                symtab.Add(st.Label, pc);
+                                if (st.Type == Statement.StType.EQU)
+                                {
+                                    // update value
+                                    symtab.Lookup(st.Label).Value = st.Value;
+                                    continue;   // that is all this statement
+                                }
                             }
                         }
+
+                        // Treat directives
                         if (st.Type == Statement.StType.ORG)
                         {
+                            // change PC
                             pc = st.Value;
                         }
                         else if (st.Type == Statement.StType.PAGE)
@@ -140,13 +168,26 @@ namespace Asm1802
                         }
                         else if (st.Type == Statement.StType.END)
                         {
-                            ended = true;   // ignote lines after END
+                            // end of source program
+                            ended = true;   // ignote all text after END
                         }
                         else
                         {
+                            // Normal statement
+                            if (pass == 2)
+                            {
+                                // generate object code
+                                byte [] code = st.Generate();
+                            }
                             pc += st.Size;
                         }
                     }
+                }
+                if (pass == 2)
+                {
+                    // List current line
+                    // List errors
+                    errcount += lstErrors.Count;
                 }
                 if (ended)
                 {
@@ -169,6 +210,8 @@ namespace Asm1802
         // Prints information about the program
         static void Info()
         {
+            Console.Out.WriteLine(errcount.ToString() + " errors");
+            Console.Out.WriteLine();
             symtab.Print();
         }
     }

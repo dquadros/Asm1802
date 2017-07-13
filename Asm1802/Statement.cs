@@ -42,6 +42,30 @@ namespace Asm1802
             MISSING_PAREN,  // Missing closing parentheses
             INV_SYNTAX      // Anything else we cannot accept
         };
+        public static string MsgError (StError err)
+        {
+            switch (err)
+            {
+                case StError.INV_MNE: return "Invalid mnemonic or missing comma";
+                case StError.DUP_SYM: return "Previously defined symbol";
+                case StError.INV_BCONST: return "Invalid binary constant";
+                case StError.MISSING_CONST: return "A constant was expected";
+                case StError.UNDEF_SYMB: return "Undefined symbol";
+                case StError.MISSING_EXPR: return "An expression was expected";
+                case StError.INV_HCONST: return "Invalid hex constant";
+                case StError.MISSING_QUOTE: return "Missing end quote";
+                case StError.INV_PERIOD: return "Invalid \'.\'";
+                case StError.BAD_START: return " Invalid char at start of statement";
+                case StError.INV_BRANCH: return "Branch out of page";
+                case StError.INV_REG: return "Invalid register number";
+                case StError.INV_DEV: return "Invalid device number";
+                case StError.INV_DCONST: return "Invalid decimal constant";
+                case StError.MISSING_PAREN: return "Missing closing parentheses";
+                case StError.INV_SYNTAX: return "Sintax error";
+            }
+            return "Unknow error";
+        }
+
 
         // This fields are determined in the first pass
         private StType _type = StType.NOP;
@@ -57,7 +81,10 @@ namespace Asm1802
             set
             {
                 _error = value;
-                _type = StType.ERROR;
+                if (value != StError.NONE)
+                {
+                    _type = StType.ERROR;
+                }
             }
         }
         
@@ -67,13 +94,8 @@ namespace Asm1802
             get { return _label; }
         }
 
-        private string _mne = "";
-        public string Mnemonic
-        {
-            get { return _mne; }
-        }
+        private UInt16 operand = 0;
 
-        private string _oper = "";
         private List<string> datalist;
 
         private UInt16 _size = 0;
@@ -199,15 +221,36 @@ namespace Asm1802
             }
             else if (tk1.Text == "END")
             {
-                st._type = StType.END;
+                Token tk2 = Token.Parse(text, ref pos);
+
+                // Does not have parameters
+                if (tk2.Type == Token.TokenType.EMPTY)
+                {
+                    st._type = StType.END;
+                }
+                else
+                {
+                    st.Error = StError.INV_SYNTAX;
+                }
             }
             else if (tk1.Text == "ORG")
             {
                 st._type = StType.ORG;
+                st.Error = st.EvalExpr(text, ref pos);
             }
             else if (tk1.Text == "PAGE")
             {
-                st._type = StType.PAGE;
+                Token tk2 = Token.Parse(text, ref pos);
+
+                // Does not have parameters
+                if (tk2.Type == Token.TokenType.EMPTY)
+                {
+                    st._type = StType.PAGE;
+                }
+                else
+                {
+                    st.Error = StError.INV_SYNTAX;
+                }
             }
             else
             {
@@ -219,9 +262,150 @@ namespace Asm1802
                 }
                 st._type = StType.INSTR;
                 st._size = inst.Size;
+
+                // Check operand
+                StError err;
+                switch (inst.Operand)
+                {
+                    case OperType.NONE:
+                        break;
+                    case OperType.REG:
+                        st.ParseReg(text, ref pos);
+                        break;
+                    case OperType.REG1:
+                        st.ParseReg(text, ref pos);
+                        if ((st.Error == StError.NONE) && (st.operand == 0))
+                        {
+                            st.Error = StError.INV_REG;
+                        }
+                        break;
+                    case OperType.IODEV:
+                        st.ParseIODev(text, ref pos);
+                        break;
+                    case OperType.SADDR:
+                        err = st.EvalExpr(text, ref pos);
+                        if (err == StError.NONE)
+                        {
+                            if (((Program.pc + 1) & 0xFF00) == (st.Value & 0xFF00))
+                            {
+                                st.operand = (UInt16)(st.Value & 0xFF);
+                            }
+                            else
+                            {
+                                st.Error = StError.INV_BRANCH;
+                            }
+                        }
+                        else
+                        {
+                            st.Error = err;
+                        }
+                        break;
+                    case OperType.LADDR:
+                        err = st.EvalExpr(text, ref pos);
+                        if (err == StError.NONE)
+                        {
+                            st.operand = st.Value;
+                        }
+                        break;
+                }
+
+                // Check datalist ...
             }
 
             return st;
+        }
+
+        // Parse a register parameter
+        // Updates type, error and operand
+        private void ParseReg(string text, ref int pos)
+        {
+            Token tk = Token.Parse(text, ref pos);
+            switch (tk.Type)
+            {
+                case Token.TokenType.BCONST:
+                case Token.TokenType.DCONST:
+                case Token.TokenType.HCONST:
+                    operand = (UInt16) (EvalConst(tk) & 0xF);
+                    break;
+                case Token.TokenType.TEXT:
+                    Symbol symb = Program.symtab.Lookup(tk.Text);
+                    if (symb != null)
+                    {
+                        operand = (UInt16)(symb.Value & 0xF);
+                    }
+                    else if ((tk.Text.Length == 2) && (tk.Text[0] == 'R'))
+                    {
+                        char r = tk.Text[1];
+                        if ((r >= '0') && (r <= '9'))
+                        {
+                            operand = (UInt16)(r - '0');
+                        }
+                        else if ((r >= 'A') && (r <= 'F'))
+                        {
+                            operand = (UInt16)(r - 'A' + 10);
+                        }
+                        else
+                        {
+                            Error = StError.INV_REG;
+                        }
+                    }
+                    else
+                    {
+                        Regex rx = new Regex("^[0-9A-F]{1,4}$");
+                        if (rx.Match(tk.Text).Success)
+                        {
+                            // Unprefixed hex constant
+                            operand = (UInt16)(EvalConst(tk) & 0xF);
+                        }
+                        else if (Program.pass == 2)
+                        {
+                            Error = StError.UNDEF_SYMB;
+                        }
+                    }
+
+                    break;
+                default:
+                    Error = StError.INV_SYNTAX;
+                    break;
+            }
+        }
+
+        // Parse a IO device parameter
+        // Updates type, error and operand
+        private void ParseIODev(string text, ref int pos)
+        {
+            Token tk = Token.Parse(text, ref pos);
+            switch (tk.Type)
+            {
+                case Token.TokenType.BCONST:
+                case Token.TokenType.DCONST:
+                case Token.TokenType.HCONST:
+                    operand = (UInt16)(EvalConst(tk) & 0x7);
+                    break;
+                case Token.TokenType.TEXT:
+                    Symbol symb = Program.symtab.Lookup(tk.Text);
+                    if (symb != null)
+                    {
+                        operand = (UInt16)(symb.Value & 0x7);
+                    }
+                    else
+                    {
+                        Regex rx = new Regex("^[0-9A-F]{1,4}$");
+                        if (rx.Match(tk.Text).Success)
+                        {
+                            // Unprefixed hex constant
+                            operand = (UInt16)(EvalConst(tk) & 0x7);
+                        }
+                        else if (Program.pass == 2)
+                        {
+                            Error = StError.UNDEF_SYMB;
+                        }
+                    }
+                    break;
+                default:
+                    Error = StError.INV_SYNTAX;
+                    break;
+            }
         }
 
         // Parses a datalist
