@@ -130,14 +130,15 @@ namespace Asm1802
                         {
                             if (pass == 1)
                             {
-                                if (symtab.Lookup(st.Label) != null)
+                                Symbol symb = symtab.Lookup(st.Label);
+                                if (symb != null)
                                 {
-                                    st.Error = Statement.StError.DUP_SYM;
+                                    symb.MarkDup();
                                 }
                                 else if (st.Type == Statement.StType.EQU)
                                 {
                                     symtab.Add(st.Label, st.Value);
-                                    continue;   // that is all this statement
+                                    continue;   // that is all in this statement
                                 }
                                 else
                                 {
@@ -146,11 +147,16 @@ namespace Asm1802
                             }
                             else
                             {
-                                if (st.Type == Statement.StType.EQU)
+                                Symbol symb = symtab.Lookup(st.Label);
+                                if (symb.Duplicate)
+                                {
+                                    lstErrors.Add(Statement.MsgError(Statement.StError.DUP_SYM));
+                                }
+                                else if (st.Type == Statement.StType.EQU)
                                 {
                                     // update value
-                                    symtab.Lookup(st.Label).Value = st.Value;
-                                    continue;   // that is all this statement
+                                    symb.Value = st.Value;
+                                    continue;   // that is all in this statement
                                 }
                             }
                         }
@@ -186,7 +192,14 @@ namespace Asm1802
                 if (pass == 2)
                 {
                     // List current line
+                    // TODO
+                    System.Console.Out.WriteLine(line);
                     // List errors
+                    // TODO
+                    foreach (string errmsg in lstErrors)
+                    {
+                        System.Console.Out.WriteLine(">>> " + errmsg);
+                    }
                     errcount += lstErrors.Count;
                 }
                 if (ended)
@@ -199,12 +212,6 @@ namespace Asm1802
             {
                 Console.Out.WriteLine("Missing END directive");
             }
-        }
-
-        // Second Pass
-        // The second pass will create the object code
-        static void Pass2()
-        {
         }
 
         // Prints information about the program

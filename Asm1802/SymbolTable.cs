@@ -45,6 +45,13 @@ namespace Asm1802
             }
         }
 
+        // Flag for duplicate symbol
+        private bool _dup = false;
+        public bool Duplicate
+        {
+            get { return _dup; }
+        }
+
         // Constructors
         public Symbol(string name)
         {
@@ -55,6 +62,12 @@ namespace Asm1802
         {
             _name = name;
             Value = value;
+        }
+
+        // Mark as duplicate
+        public void MarkDup()
+        {
+            _dup = true;
         }
 
         // Convert to string for printing

@@ -96,7 +96,7 @@ namespace Asm1802
 
         private UInt16 operand = 0;
 
-        private List<string> datalist;
+        private List<byte> datalist;
 
         private UInt16 _size = 0;
         public UInt16 Size
@@ -119,11 +119,11 @@ namespace Asm1802
         // Constructor
         public Statement()
         {
-            datalist = new List<string>();
+            datalist = new List<byte>();
             code = new byte[0];
         }
 
-        // Construct from source code (Pass1)
+        // Construct from source code
         public static Statement Parse(string text, int ln, ref int pos)
         {
             const string delim = " \t;";
@@ -141,18 +141,13 @@ namespace Asm1802
             }
 
             // test for comment and datalist
-            if (text[pos] == '.')
+            if (st.TestComment(text, ref pos))
             {
-                pos++;
-                if ((pos == text.Length) || (text[pos] != '.'))
-                {
-                    st.Error = StError.INV_PERIOD;
-                }
-                pos = text.Length;
                 return st;  // comment or error
             }
             else if (text[pos] == ',')
             {
+                pos++;
                 st.ParseDatalist(text, ref pos);
                 return st;
             }
@@ -218,6 +213,7 @@ namespace Asm1802
             if (tk1.Text == "DC")
             {
                 st._type = StType.DC;
+                st.ParseDatalist(text, ref pos);
             }
             else if (tk1.Text == "END")
             {
@@ -282,6 +278,17 @@ namespace Asm1802
                     case OperType.IODEV:
                         st.ParseIODev(text, ref pos);
                         break;
+                    case OperType.EXPR:
+                        err = st.EvalExpr(text, ref pos);
+                        if (err == StError.NONE)
+                        {
+                            st.operand = (UInt16)(st.Value & 0xFF);
+                        }
+                        else
+                        {
+                            st.Error = err;
+                        }
+                        break;
                     case OperType.SADDR:
                         err = st.EvalExpr(text, ref pos);
                         if (err == StError.NONE)
@@ -309,7 +316,19 @@ namespace Asm1802
                         break;
                 }
 
-                // Check datalist ...
+                // Check datalist
+                if (!SkipSpace(text, ref pos))
+                {
+                    if (text[pos] == ',')
+                    {
+                        pos++;
+                        st.ParseDatalist(text, ref pos);
+                    }
+                    else if (!st.TestComment(text, ref pos))
+                    {
+                        st.Error = StError.INV_SYNTAX;
+                    }
+                }
             }
 
             return st;
@@ -411,6 +430,66 @@ namespace Asm1802
         // Parses a datalist
         private void ParseDatalist(string text, ref int pos)
         {
+            Token tk;
+            while (!SkipSpace(text, ref pos))
+            {
+                if (TestComment(text, ref pos))
+                {
+                    break;
+                }
+
+                int aux = pos;
+                tk = Token.Parse(text, ref aux);
+                if (tk.Type == Token.TokenType.STRING)
+                {
+                    foreach (char c in tk.Text)
+                    {
+                        datalist.Add((byte) c);
+                    }
+                    pos = aux;
+                }
+                else
+                {
+                    StError err = EvalExpr(text, ref pos);
+                    if (err == StError.NONE)
+                    {
+                        // TODO: check if 16bit
+                        datalist.Add((byte) (Value & 0xFF));
+                    }
+                    else
+                    {
+                        Error = err;
+                        break;
+                    }
+                }
+
+                if (!SkipSpace(text, ref pos))
+                {
+                    if (!TestComment(text, ref pos))
+                    {
+                        if (text[pos] != ',')
+                        {
+                            Error = StError.INV_SYNTAX;
+                        }
+                        else
+                        {
+                            pos++;
+                        }
+                    }
+                }
+            }
+
+            _size += (UInt16) datalist.Count;
+
+            if (datalist.Count > 0)
+            {
+                Console.Out.Write("Datalist: ");
+                foreach (byte b in datalist)
+                {
+                    Console.Out.Write(b.ToString("X2")+" ");
+                }
+                Console.Out.WriteLine();
+            }
         }
 
         // Evaluate expression, put result in _value
@@ -425,6 +504,7 @@ namespace Asm1802
             if ((char.ToUpper(text[pos]) == 'A') && (pos < (text.Length-1)))
             {
                 int aux = pos + 1;
+
                 if (text[aux] == '.')
                 {
                     if (aux < text.Length)
@@ -523,6 +603,8 @@ namespace Asm1802
                         case Token.TokenType.DCONST:
                         case Token.TokenType.HCONST:
                             return EvalConst(tk);
+                        case Token.TokenType.STRING:
+                            return (UInt16)tk.Text[0];
                         case Token.TokenType.TEXT:
                             Symbol symb = Program.symtab.Lookup(tk.Text);
                             if (symb == null)
@@ -537,7 +619,7 @@ namespace Asm1802
                                 }
                                 else
                                 {
-                                    // error if pass 2
+                                    // TODO: error if pass 2
                                 }
                             }
                             else
@@ -584,6 +666,7 @@ namespace Asm1802
         // Generates object code (Pass2)
         public byte[] Generate()
         {
+            //TODO
             return code;
         }
 
@@ -595,7 +678,28 @@ namespace Asm1802
             {
                 pos++;
             }
+            if ((pos < text.Length) && (text[pos] == ';'))
+            {
+                return true;
+            }
             return pos == text.Length;
+        }
+
+        // Tests for comment
+        // return true if pos points to '.'
+        private bool TestComment(string text, ref int pos)
+        {
+            if (text[pos] == '.')
+            {
+                pos++;
+                if ((pos == text.Length) || (text[pos] != '.'))
+                {
+                    Error = StError.INV_PERIOD;
+                }
+                pos = text.Length;
+                return true;  // comment or error
+            }
+            return false;   // something else
         }
 
         // Eval constant
