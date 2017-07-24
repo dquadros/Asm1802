@@ -66,6 +66,9 @@ namespace Asm1802
             return "Unknow error";
         }
 
+        // Value sizes
+        // CRA has a few quirks about sizes
+        public enum ValueSize { ONE, TWO, FORCE_TWO };
 
         // This fields are determined in the first pass
         private StType _type = StType.NOP;
@@ -94,8 +97,9 @@ namespace Asm1802
             get { return _label; }
         }
 
+        private Instruction inst;
         private UInt16 operand = 0;
-
+        private ValueSize opersize = ValueSize.ONE;
         private List<byte> datalist;
 
         private UInt16 _size = 0;
@@ -104,7 +108,12 @@ namespace Asm1802
             get { return _size; }
         }
 
-        private int linenum;
+        private int _linenum;
+        public int LineNum
+        {
+            get { return _linenum; }
+        }
+        private string text;
 
         // Final result of value will be determined on second pass,
         private UInt16 _value = 0;
@@ -112,108 +121,113 @@ namespace Asm1802
         {
             get { return _value; }
         }
+        private ValueSize vs = ValueSize.ONE;
 
         // Object code, determined at second pass
         private byte[] code;
 
-        // Constructor
+        // Constructors
         public Statement()
         {
             datalist = new List<byte>();
             code = new byte[0];
         }
 
-        // Construct from source code
-        public static Statement Parse(string text, int ln, ref int pos)
+        public Statement(string txt, int ln)
         {
-            const string delim = " \t;";
-            Statement st = new Statement();
-            st.linenum = ln;
+            _linenum = ln;
+            text = txt;
+            datalist = new List<byte>();
+            code = new byte[0];
+        }
 
-            // skip leading spaces and/or ';'
-            while ((pos < text.Length) && (delim.IndexOf(text[pos]) >= 0))
+        // Parse the statement, comment and ';' already stripped
+        public void Parse()
+        {
+            int pos = 0;
+
+            // Clear code
+            _size = 0;
+            datalist = new List<byte>();
+
+            // Skip leading spaces
+            if (SkipSpace(ref pos))
+            {
+                return;         // empty statement
+            }
+
+            // Check for datalist only
+            if (text[pos] == ',')
             {
                 pos++;
-            }
-            if (pos == text.Length)
-            {
-                return st;  // empty
+                ParseDatalist(ref pos);
+                return;         // datalist
             }
 
-            // test for comment and datalist
-            if (st.TestComment(text, ref pos))
-            {
-                return st;  // comment or error
-            }
-            else if (text[pos] == ',')
-            {
-                pos++;
-                st.ParseDatalist(text, ref pos);
-                return st;
-            }
-            
-            // normal statement
+            // Normal statement
             if (!char.IsLetter(text[pos]))
             {
-                st.Error = StError.BAD_START;
-                return st;
+                Error = StError.BAD_START;
+                return;
             }
             Token tk1 = Token.Parse(text, ref pos);
             if (tk1.Type != Token.TokenType.TEXT)
             {
-                st.Error = StError.BAD_START;
-                return st;
+                Error = StError.BAD_START;
+                return;
             }
             if (pos < text.Length)
             {
                 if (text[pos] == ':')
                 {
                     // Label
-                    st._label = tk1.Text;
+                    _label = tk1.Text;
                     pos++;
-                    SkipSpace(text, ref pos);
+                    SkipSpace(ref pos);
                     if (pos >= text.Length)
                     {
-                        st._type = StType.NOP;
-                        return st;
+                        _type = StType.NOP;
+                        return;
                     }
                     // Check what is next
                     if (text[pos] == ',')
                     {
                         pos++;
-                        st.ParseDatalist(text, ref pos);
-                        return st;
+                        ParseDatalist(ref pos);
+                        return;
                     }
                     tk1 = Token.Parse(text, ref pos);
                     if (tk1.Type != Token.TokenType.TEXT)
                     {
-                        st.Error = StError.INV_MNE;
-                        return st;
+                        Error = StError.INV_MNE;
+                        return;
                     }
                 }
                 else
                 {
-                    SkipSpace(text, ref pos);
+                    SkipSpace(ref pos);
                     if ((pos < text.Length) && (text[pos] == '='))
                     {
+                        // Equate
                         pos++;
-                        st._type = StType.EQU;
-                        st._label = tk1.Text;
-                        StError err = st.EvalExpr(text, ref pos);
+                        _type = StType.EQU;
+                        _label = tk1.Text;
+                        StError err = EvalExpr(ref pos);
                         if (err != StError.NONE)
                         {
-                            st.Error = err;
+                            Error = err;
                         }
-                        return st;
+                        return;
                     }
                 }
             }
 
-            SkipSpace(text, ref pos);
+            // Check for directive
+            SkipSpace(ref pos);
             if (tk1.Text == "DC")
             {
-                st._type = StType.DC;
-                st.ParseDatalist(text, ref pos);
+                _type = StType.DC;
+                ParseDatalist(ref pos);
             }
             else if (tk1.Text == "END")
             {
@@ -222,17 +236,17 @@ namespace Asm1802
                 // Does not have parameters
                 if (tk2.Type == Token.TokenType.EMPTY)
                 {
-                    st._type = StType.END;
+                    _type = StType.END;
                 }
                 else
                 {
-                    st.Error = StError.INV_SYNTAX;
+                    Error = StError.INV_SYNTAX;
                 }
             }
             else if (tk1.Text == "ORG")
             {
-                st._type = StType.ORG;
-                st.Error = st.EvalExpr(text, ref pos);
+                _type = StType.ORG;
+                Error = EvalExpr(ref pos);
             }
             else if (tk1.Text == "PAGE")
             {
@@ -241,23 +255,24 @@ namespace Asm1802
                 // Does not have parameters
                 if (tk2.Type == Token.TokenType.EMPTY)
                 {
-                    st._type = StType.PAGE;
+                    _type = StType.PAGE;
                 }
                 else
                 {
-                    st.Error = StError.INV_SYNTAX;
+                    Error = StError.INV_SYNTAX;
                 }
             }
             else
             {
-                Instruction inst = InstrTable.Lookup(tk1.Text);
+                // Must be an instruction mnemonic
+                inst = InstrTable.Lookup(tk1.Text);
                 if (inst == null)
                 {
-                    st.Error = StError.INV_MNE;
-                    return st;
+                    Error = StError.INV_MNE;
+                    return;
                 }
-                st._type = StType.INSTR;
-                st._size = inst.Size;
+                _type = StType.INSTR;
+                _size = inst.Size;
 
                 // Check operand
                 StError err;
@@ -266,77 +281,89 @@ namespace Asm1802
                     case OperType.NONE:
                         break;
                     case OperType.REG:
-                        st.ParseReg(text, ref pos);
+                        ParseReg(ref pos);
                         break;
                     case OperType.REG1:
-                        st.ParseReg(text, ref pos);
-                        if ((st.Error == StError.NONE) && (st.operand == 0))
+                        ParseReg(ref pos);
+                        if ((Error == StError.NONE) && (operand == 0))
                         {
-                            st.Error = StError.INV_REG;
+                            Error = StError.INV_REG;
                         }
                         break;
                     case OperType.IODEV:
-                        st.ParseIODev(text, ref pos);
+                        ParseIODev(ref pos);
                         break;
                     case OperType.EXPR:
-                        err = st.EvalExpr(text, ref pos);
+                        err = EvalExpr(ref pos);
                         if (err == StError.NONE)
                         {
-                            st.operand = (UInt16)(st.Value & 0xFF);
-                        }
-                        else
-                        {
-                            st.Error = err;
-                        }
-                        break;
-                    case OperType.SADDR:
-                        err = st.EvalExpr(text, ref pos);
-                        if (err == StError.NONE)
-                        {
-                            if (((Program.pc + 1) & 0xFF00) == (st.Value & 0xFF00))
+                            if (vs == ValueSize.FORCE_TWO)
                             {
-                                st.operand = (UInt16)(st.Value & 0xFF);
+                                // CRA Feature or Bug?
+                                // LDI A(LABEL) generates three bytes
+                                operand = Value;
+                                opersize = ValueSize.TWO;
+                                _size++;
                             }
                             else
                             {
-                                st.Error = StError.INV_BRANCH;
+                                operand = (UInt16)(Value & 0xFF);
+                                opersize = ValueSize.ONE;
                             }
                         }
                         else
                         {
-                            st.Error = err;
+                            Error = err;
+                        }
+                        break;
+                    case OperType.SADDR:
+                        err = EvalExpr(ref pos);
+                        if (err == StError.NONE)
+                        {
+                            if (((Program.pc + 1) & 0xFF00) == (Value & 0xFF00))
+                            {
+                                operand = (UInt16)(Value & 0xFF);
+                            }
+                            else if (Program.pass == 2)
+                            {
+                                Error = StError.INV_BRANCH;
+                            }
+                        }
+                        else
+                        {
+                            Error = err;
                         }
                         break;
                     case OperType.LADDR:
-                        err = st.EvalExpr(text, ref pos);
+                        err = EvalExpr(ref pos);
                         if (err == StError.NONE)
                         {
-                            st.operand = st.Value;
+                            operand = Value;
+                            opersize = ValueSize.TWO;
                         }
                         break;
                 }
 
-                // Check datalist
-                if (!SkipSpace(text, ref pos))
+                // Check datalist after instruction
+                if (!SkipSpace(ref pos))
                 {
                     if (text[pos] == ',')
                     {
                         pos++;
-                        st.ParseDatalist(text, ref pos);
+                        ParseDatalist(ref pos);
                     }
-                    else if (!st.TestComment(text, ref pos))
+                    else
                     {
-                        st.Error = StError.INV_SYNTAX;
+                        Error = StError.INV_SYNTAX;
                     }
                 }
             }
 
-            return st;
         }
 
         // Parse a register parameter
         // Updates type, error and operand
-        private void ParseReg(string text, ref int pos)
+        private void ParseReg(ref int pos)
         {
             Token tk = Token.Parse(text, ref pos);
             switch (tk.Type)
@@ -374,6 +401,7 @@ namespace Asm1802
                         if (rx.Match(tk.Text).Success)
                         {
                             // Unprefixed hex constant
+                            tk.Type = Token.TokenType.HCONST;
                             operand = (UInt16)(EvalConst(tk) & 0xF);
                         }
                         else if (Program.pass == 2)
@@ -391,7 +419,7 @@ namespace Asm1802
 
         // Parse a IO device parameter
         // Updates type, error and operand
-        private void ParseIODev(string text, ref int pos)
+        private void ParseIODev(ref int pos)
         {
             Token tk = Token.Parse(text, ref pos);
             switch (tk.Type)
@@ -413,6 +441,7 @@ namespace Asm1802
                         if (rx.Match(tk.Text).Success)
                         {
                             // Unprefixed hex constant
+                            tk.Type = Token.TokenType.HCONST;
                             operand = (UInt16)(EvalConst(tk) & 0x7);
                         }
                         else if (Program.pass == 2)
@@ -428,16 +457,11 @@ namespace Asm1802
         }
 
         // Parses a datalist
-        private void ParseDatalist(string text, ref int pos)
+        private void ParseDatalist(ref int pos)
         {
             Token tk;
-            while (!SkipSpace(text, ref pos))
+            while (!SkipSpace(ref pos))
             {
-                if (TestComment(text, ref pos))
-                {
-                    break;
-                }
-
                 int aux = pos;
                 tk = Token.Parse(text, ref aux);
                 if (tk.Type == Token.TokenType.STRING)
@@ -450,10 +474,13 @@ namespace Asm1802
                 }
                 else
                 {
-                    StError err = EvalExpr(text, ref pos);
+                    StError err = EvalExpr(ref pos);
                     if (err == StError.NONE)
                     {
-                        // TODO: check if 16bit
+                        if (vs != ValueSize.ONE)
+                        {
+                            datalist.Add((byte)(Value >> 8));
+                        }
                         datalist.Add((byte) (Value & 0xFF));
                     }
                     else
@@ -463,44 +490,32 @@ namespace Asm1802
                     }
                 }
 
-                if (!SkipSpace(text, ref pos))
+                if (!SkipSpace(ref pos))
                 {
-                    if (!TestComment(text, ref pos))
+                    if (text[pos] != ',')
                     {
-                        if (text[pos] != ',')
-                        {
-                            Error = StError.INV_SYNTAX;
-                        }
-                        else
-                        {
-                            pos++;
-                        }
+                        Error = StError.INV_SYNTAX;
+                    }
+                    else
+                    {
+                        pos++;
                     }
                 }
             }
 
             _size += (UInt16) datalist.Count;
-
-            if (datalist.Count > 0)
-            {
-                Console.Out.Write("Datalist: ");
-                foreach (byte b in datalist)
-                {
-                    Console.Out.Write(b.ToString("X2")+" ");
-                }
-                Console.Out.WriteLine();
-            }
         }
 
         // Evaluate expression, put result in _value
         enum ExprMode { NORMAL, ADDR, ADDR_LOW, ADDR_HIGH };
-        private StError EvalExpr(string text, ref int pos)
+        private StError EvalExpr(ref int pos)
         {
             ExprMode mode = ExprMode.NORMAL;
             StError err = StError.NONE;
+            int nbytes = 1;
 
             // check for A(sexpr), A.0(sexpr) and A.1(sexpr)
-            SkipSpace(text, ref pos);
+            SkipSpace(ref pos);
             if ((char.ToUpper(text[pos]) == 'A') && (pos < (text.Length-1)))
             {
                 int aux = pos + 1;
@@ -531,7 +546,7 @@ namespace Asm1802
                     }
                 }
 
-                if (SkipSpace(text, ref aux) || (text[aux] != '('))
+                if (SkipSpace(ref aux) || (text[aux] != '('))
                 {
                     if (mode != ExprMode.NORMAL)
                     {
@@ -546,13 +561,16 @@ namespace Asm1802
                     {
                         case ExprMode.NORMAL:
                             mode = ExprMode.ADDR;
-                            _value = EvalSimpleExpr(text, ref pos, ref err);
+                            _value = EvalSimpleExpr(text, ref pos, ref err, ref nbytes);
+                            vs = ValueSize.FORCE_TWO;
                             break;
                         case ExprMode.ADDR_LOW:
-                            _value = (UInt16) (EvalSimpleExpr(text, ref pos, ref err) & 0xFF);
+                            _value = (UInt16) (EvalSimpleExpr(text, ref pos, ref err, ref nbytes) & 0xFF);
+                            vs = ValueSize.ONE;
                             break;
                         case ExprMode.ADDR_HIGH:
-                            _value = (UInt16) (EvalSimpleExpr(text, ref pos, ref err) >> 8);
+                            _value = (UInt16) (EvalSimpleExpr(text, ref pos, ref err, ref nbytes) >> 8);
+                            vs = ValueSize.ONE;
                             break;
                     }
                     if (err != StError.NONE)
@@ -562,7 +580,7 @@ namespace Asm1802
                     }
 
                     // now find the closing parentheses
-                    if (SkipSpace(text, ref pos) || (text[pos] != ')'))
+                    if (SkipSpace(ref pos) || (text[pos] != ')'))
                     {
                         return StError.MISSING_PAREN;
                     }
@@ -574,16 +592,17 @@ namespace Asm1802
                 }
             }
 
-            _value = EvalSimpleExpr(text, ref pos, ref err);
+            _value = EvalSimpleExpr(text, ref pos, ref err, ref nbytes);
+            vs = (nbytes == 1) ? ValueSize.ONE : ValueSize.TWO;
             return err;
         }
 
         // Evaluate simple expression
-        private UInt16 EvalSimpleExpr(string text, ref int pos, ref StError err)
+        private UInt16 EvalSimpleExpr(string text, ref int pos, ref StError err, ref int nbytes)
         {
             UInt16 val = 0;
 
-            if (SkipSpace(text, ref pos))
+            if (SkipSpace(ref pos))
             {
                 err = StError.MISSING_EXPR;
             }
@@ -593,6 +612,7 @@ namespace Asm1802
                 {
                     val = Program.pc;
                     pos++;
+                    nbytes = 2;
                 }
                 else
                 {
@@ -602,7 +622,12 @@ namespace Asm1802
                         case Token.TokenType.BCONST:
                         case Token.TokenType.DCONST:
                         case Token.TokenType.HCONST:
-                            return EvalConst(tk);
+                            val = EvalConst(tk);
+                            if (val > 0xFF)
+                            {
+                                nbytes = 2;
+                            }
+                            return val;
                         case Token.TokenType.STRING:
                             return (UInt16)tk.Text[0];
                         case Token.TokenType.TEXT:
@@ -615,11 +640,24 @@ namespace Asm1802
                                 if (rx.Match(tk.Text).Success)
                                 {
                                     tk.Type = Token.TokenType.HCONST;
-                                    return EvalConst(tk);
+                                    val = EvalConst(tk);
+                                    if (val > 0xFF)
+                                    {
+                                        nbytes = 2;
+                                    }
+                                    return val;
                                 }
                                 else
                                 {
-                                    // TODO: error if pass 2
+                                    if (Program.pass == 2)
+                                    {
+                                        // Error if pass 2
+                                        err = StError.UNDEF_SYMB;
+                                    }
+                                    else
+                                    {
+                                        val = 0;
+                                    }
                                 }
                             }
                             else
@@ -634,11 +672,12 @@ namespace Asm1802
                 }
 
                 // check for +/- const
-                if (!SkipSpace(text, ref pos) &&
+                if (!SkipSpace(ref pos) &&
                     ((text[pos] == '+') || (text[pos] == '-')))
                 {
+                    nbytes = 2;
                     char oper = text[pos++];
-                    SkipSpace(text, ref pos);
+                    SkipSpace(ref pos);
                     Token tk = Token.Parse(text, ref pos);
                     switch (tk.Type)
                     {
@@ -666,40 +705,57 @@ namespace Asm1802
         // Generates object code (Pass2)
         public byte[] Generate()
         {
-            //TODO
+            int pos = 0;
+            code = new byte[Size];
+
+            if (Type == StType.INSTR)
+            {
+                switch (inst.Operand)
+                {
+                    case OperType.NONE:
+                        code[pos++] = inst.Opcode;
+                        break;
+                    case OperType.REG:
+                    case OperType.REG1:
+                    case OperType.IODEV:
+                        code[pos++] = (byte) (inst.Opcode + operand);
+                        break;
+                    case OperType.EXPR:
+                        code[pos++] = inst.Opcode;
+                        if (opersize == ValueSize.TWO)
+                        {
+                            // CRA Feature or bug?
+                            code[pos++] = (byte)(operand >> 8);
+                        }
+                        code[pos++] = (byte)(operand & 0xFF);
+                        break;
+                    case OperType.SADDR:
+                        code[pos++] = inst.Opcode;
+                        code[pos++] = (byte) operand;
+                        break;
+                    case OperType.LADDR:
+                        code[pos++] = inst.Opcode;
+                        code[pos++] = (byte)(operand >> 8);
+                        code[pos++] = (byte)(operand & 0xFF);
+                        break;
+                }
+            }
+            foreach (byte b in datalist)
+            {
+                code[pos++] = b;
+            }
             return code;
         }
 
         // Skip space
         // return true if end of line
-        private static bool SkipSpace(string text, ref int pos)
+        private bool SkipSpace(ref int pos)
         {
             while ((pos < text.Length) && Char.IsWhiteSpace(text[pos]))
             {
                 pos++;
             }
-            if ((pos < text.Length) && (text[pos] == ';'))
-            {
-                return true;
-            }
             return pos == text.Length;
-        }
-
-        // Tests for comment
-        // return true if pos points to '.'
-        private bool TestComment(string text, ref int pos)
-        {
-            if (text[pos] == '.')
-            {
-                pos++;
-                if ((pos == text.Length) || (text[pos] != '.'))
-                {
-                    Error = StError.INV_PERIOD;
-                }
-                pos = text.Length;
-                return true;  // comment or error
-            }
-            return false;   // something else
         }
 
         // Eval constant

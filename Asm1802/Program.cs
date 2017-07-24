@@ -21,12 +21,13 @@ namespace Asm1802
 {
     class Program
     {
-        private static string SourceFile;   // source file name
-        private static string[] source;     // source file in memory
-        public static SymbolTable symtab;   // symbol table
-        public static UInt16 pc;            // location counter
-        public static int pass;             // pass number
-        private static int errcount;        // number of errors in pass2
+        private static string SourceFile;               // source file name
+        private static string[] source;                 // source file in memory
+        private static List<Statement> lstStatements;   // parsed source file
+        public static SymbolTable symtab;               // symbol table
+        public static UInt16 pc;                        // location counter
+        public static int pass;                         // pass number
+        private static int errcount;                    // number of errors in pass2
 
         // Program entry point
         static void Main(string[] args)
@@ -40,8 +41,9 @@ namespace Asm1802
                 Console.Out.WriteLine();
                 if (Init(args))
                 {
-                    Assemble(1);
-                    Assemble(2);
+                    PreProcess();
+                    Pass1();
+                    Pass2();
                     Info();
                 }
             }
@@ -97,122 +99,256 @@ namespace Asm1802
             return true;
         }
 
-        // Analise the loaded source code
-        static void Assemble(int p)
+        // Breaks lines into statements
+        private enum PreProcState
         {
-            int sline = 1;          // current source line
-            bool ended = false;
-            pc = 0;
-            pass = p;
-
+            TEXT, STRING, PERIOD
+        };
+        static void PreProcess()
+        {
+            int linenum = 1;
+            PreProcState state;
+            lstStatements = new List<Statement>();
             foreach (string line in source)
             {
-                // parse statements in current line
-                List<string> lstErrors = new List<string>();
-                for (int pos = 0; !ended && (pos < line.Length); )
+                int pos = 0;
+                int start = 0;
+                state = PreProcState.TEXT;
+                while (pos < line.Length)
                 {
-                    Statement st = Statement.Parse(line, sline, ref pos);
-                    if (st.Type == Statement.StType.ERROR)
+                    switch (state)
                     {
-                        if (pass == 2)
-                        {
-                            // record error
-                            lstErrors.Add(Statement.MsgError(st.Error) + " near column " + (pos + 1).ToString());
-                        }
+                        case PreProcState.TEXT:
+                            if (line[pos] == '\'')
+                            {
+                                state = PreProcState.STRING;
+                            }
+                            else if (line[pos] == '.')
+                            {
+                                state = PreProcState.PERIOD;
+                            }
+                            else if (line[pos] == ';')
+                            {
+                                string text = line.Substring(start, pos - start);
+                                lstStatements.Add(new Statement(text, linenum));
+                                start = pos + 1;
+                            }
+                            pos++;
+                            break;
+                        case PreProcState.PERIOD:
+                            if (line[pos] == '.')
+                            {
+                                string text = line.Substring(start, pos - start - 1);
+                                lstStatements.Add(new Statement(text, linenum));
+                                start = pos = line.Length;
+                            }
+                            else
+                            {
+                                state = PreProcState.TEXT;
+                                pos++;
+                            }
+                            break;
+                        case PreProcState.STRING:
+                            if (line[pos] == '\'')
+                            {
+                                state = PreProcState.TEXT;
+                            }
+                            pos++;
+                            break;
+                    }
+                }
+                if (start < pos)
+                {
+                    string text = line.Substring(start, pos - start);
+                    lstStatements.Add(new Statement(text, linenum));
+                }
+                linenum++;
+            }
+        }
 
-                        // ignore rest of line
+        // First Pass
+        static void Pass1()
+        {
+            bool ended = false;
+            pc = 0;
+            pass = 1;
+
+            foreach (Statement st in lstStatements)
+            {
+                st.Parse();
+                if (st.Type != Statement.StType.ERROR)
+                {
+                    // Treat symbol definitions
+                    if (st.Label != "")
+                    {
+                        Symbol symb = symtab.Lookup(st.Label);
+                        if (symb != null)
+                        {
+                            symb.MarkDup();
+                        }
+                        else if (st.Type == Statement.StType.EQU)
+                        {
+                            symtab.Add(st.Label, st.Value);
+                            continue;   // that is all in this statement
+                        }
+                        else
+                        {
+                            symtab.Add(st.Label, pc);
+                        }
+                    }
+
+                    // Treat directives
+                    if (st.Type == Statement.StType.ORG)
+                    {
+                        // change PC
+                        pc = st.Value;
+                    }
+                    else if (st.Type == Statement.StType.PAGE)
+                    {
+                        // Advance PC to start of next page
+                        pc = (UInt16) ((pc + 0x100) & 0xFF00);
+                    }
+                    else if (st.Type == Statement.StType.END)
+                    {
+                        // end of source program
+                        ended = true;   // ignote all text after END
                         break;
                     }
                     else
                     {
-                        // Treat symbol definitions
-                        if (st.Label != "") 
-                        {
-                            if (pass == 1)
-                            {
-                                Symbol symb = symtab.Lookup(st.Label);
-                                if (symb != null)
-                                {
-                                    symb.MarkDup();
-                                }
-                                else if (st.Type == Statement.StType.EQU)
-                                {
-                                    symtab.Add(st.Label, st.Value);
-                                    continue;   // that is all in this statement
-                                }
-                                else
-                                {
-                                    symtab.Add(st.Label, pc);
-                                }
-                            }
-                            else
-                            {
-                                Symbol symb = symtab.Lookup(st.Label);
-                                if (symb.Duplicate)
-                                {
-                                    lstErrors.Add(Statement.MsgError(Statement.StError.DUP_SYM));
-                                }
-                                else if (st.Type == Statement.StType.EQU)
-                                {
-                                    // update value
-                                    symb.Value = st.Value;
-                                    continue;   // that is all in this statement
-                                }
-                            }
-                        }
-
-                        // Treat directives
-                        if (st.Type == Statement.StType.ORG)
-                        {
-                            // change PC
-                            pc = st.Value;
-                        }
-                        else if (st.Type == Statement.StType.PAGE)
-                        {
-                            // Advance PC to start of next page
-                            pc = (UInt16) ((pc + 0x100) & 0xFF00);
-                        }
-                        else if (st.Type == Statement.StType.END)
-                        {
-                            // end of source program
-                            ended = true;   // ignote all text after END
-                        }
-                        else
-                        {
-                            // Normal statement
-                            if (pass == 2)
-                            {
-                                // generate object code
-                                byte [] code = st.Generate();
-                            }
-                            pc += st.Size;
-                        }
+                        // Normal statement
+                        pc += st.Size;
                     }
                 }
-                if (pass == 2)
-                {
-                    // List current line
-                    // TODO
-                    System.Console.Out.WriteLine(line);
-                    // List errors
-                    // TODO
-                    foreach (string errmsg in lstErrors)
-                    {
-                        System.Console.Out.WriteLine(">>> " + errmsg);
-                    }
-                    errcount += lstErrors.Count;
-                }
-                if (ended)
-                {
-                    break;
-                }
-                sline++;
             }
             if (!ended)
             {
                 Console.Out.WriteLine("Missing END directive");
             }
         }
+
+        // Second pass
+        static void Pass2 ()
+        {
+            List<string> lstErrors = new List<string>();
+            byte[] objcode = new byte[0];
+            int sline = 0;
+            UInt16 linepc = 0;
+            pc = 0;
+            pass = 2;
+
+            foreach (Statement st in lstStatements)
+            {
+                if (st.LineNum != sline)
+                {
+                    if (sline != 0)
+                    {
+                        // List previous line
+                        ListLine(sline, linepc, objcode, lstErrors);
+                    }
+                    sline = st.LineNum;
+                    errcount += lstErrors.Count;
+                    lstErrors = new List<string>();
+                    linepc = pc;
+                    objcode = new byte[0];
+                }
+
+                st.Parse();
+
+                if (st.Type == Statement.StType.ERROR)
+                {
+                    // record error
+                    lstErrors.Add(Statement.MsgError(st.Error));
+                }
+                else
+                {
+                    // Treat symbol definitions
+                    if (st.Label != "") 
+                    {
+                        Symbol symb = symtab.Lookup(st.Label);
+                        if (symb.Duplicate)
+                        {
+                            lstErrors.Add(Statement.MsgError(Statement.StError.DUP_SYM));
+                        }
+                        else if (st.Type == Statement.StType.EQU)
+                        {
+                            // update value
+                            symb.Value = st.Value;
+                            continue;   // that is all in this statement
+                        }
+                     }
+
+                    // Treat directives
+                    if (st.Type == Statement.StType.ORG)
+                    {
+                        // change PC
+                        pc = st.Value;
+                    }
+                    else if (st.Type == Statement.StType.PAGE)
+                    {
+                        // Advance PC to start of next page
+                        pc = (UInt16) ((pc + 0x100) & 0xFF00);
+                    }
+                    else if (st.Type == Statement.StType.END)
+                    {
+                        // end of source program
+                        break;
+                    }
+                    else
+                    {
+                        // Normal statement or DC directive
+                        // generate object code
+                        byte [] code = st.Generate();
+                        if  (code.Length > 0)
+                        {
+                            int oldsize = objcode.Length;
+                            Array.Resize<byte>(ref objcode, objcode.Length + code.Length);
+                            Array.Copy(code, 0, objcode, oldsize, code.Length);
+                        }
+                        pc += st.Size;
+                    }
+                }
+            }
+            // List last line
+            ListLine(sline, linepc, objcode, lstErrors);
+        }
+
+        // Prints source line
+        static void ListLine(int linenum, UInt16 pc, byte[] objcode, List<string> lstErrors)
+        {
+            int off = 0;
+            int nb;
+
+            do
+            {
+                Console.Write((pc+off).ToString("X4"));
+                Console.Write(" ");
+                for (nb = 0; (off < objcode.Length) && (nb < 7); nb++, off++)
+                {
+                    Console.Write(objcode[off].ToString("X2"));
+                }
+                Console.Write(";");
+                while (nb < 7)
+                {
+                    Console.Write("  ");
+                    nb++;
+                }
+                Console.Write(linenum.ToString(" "));
+                Console.Write(linenum.ToString("D4"));
+                if (off < 8)
+                {
+                    Console.Write(" ");
+                    Console.Write(source[linenum - 1]);
+                }
+                Console.WriteLine();
+            } while (off < objcode.Length);
+
+            foreach (string errmsg in lstErrors)
+            {
+                System.Console.Out.WriteLine(">>> " + errmsg);
+            }
+        }
+
 
         // Prints information about the program
         static void Info()
