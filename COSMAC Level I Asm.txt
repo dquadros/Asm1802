@@ -6,13 +6,13 @@ Source: Operator Manual for the RCA COSMAC Development System II
 
 Line and Comments
 - A line consistes of zero or more statements, optionally followed by a comment
-- Multiple statements are (optionaly) separeted by semicolons (;)
+- Multiple statements are separated by semicolons (;)
 - Comments starts with two periods (..)
 - Spaces betweem tokens are ignored
 
 Constants
 - hexadecimal: #h..h or X'h..h' where h is an hex digit
-  also h..h if first digit is A to F
+  also h..h if first digit is A to F and it is not a symbol
   CRA (COSMAC Resident Assembler) requires an even number of digits
   hex numbers are truncated to 16 bits
 - decimal: d..d or D'dd' where d is a decimal digit
@@ -22,25 +22,28 @@ Constants
 - text T'c..c' whre c is a printable caracter
   '' inside a constant equals '
 
-Basic Expressions (expr)
+Basic Expressions (bexpr)
 - evaluate to 16 bits
 - constant
 - symbol
 - symbol + constant
 - symbol - constant
 
-Expression
-- expr
-- A(expr)
-  equal to expr, result in 16 bits
-- A.1(expr)
+Expression (expr)
+- bexpr
+  result may be 8 or 16 bit
+- A(bexpr)
+  equal to expr, result always in 16 bits
+- A.1(bexpr)
   returns most significant byte
-- A.0(expr)
+- A.0(bexpr)
   returns least significant byte
 
 Datalist
 - expr[, expr[, expr...]]
-- uses lower 8 bits of expressions
+- constants greater than 255 generate two bytes
+- A(bexpr) forces two bytes
+- all other should be 8 bits?
 
 Statement
 - [Label:] [Mnemonic [operand] [datalist]] [,datalist]
@@ -60,10 +63,11 @@ Operand:
   short (sa): uses lower byte, upper byte should be same as location counter
   long (la): uses 16 bit
 - imediate (imed): uses lower byte
+  CRA will use alse upper byte if A(bexpr) used
 
 Directives
 - DC datalist
-  define constant
+  define constants
 - ORG expr
   sets location counter to expression
 - PAGE
@@ -169,38 +173,3 @@ Control
   OUT io     6I  (I = io) 
   INP io     6I  (I = io+8)
 
--=-=-=-=-=-=-=
-
-Line parser
-
-(1) skip spaces and ';', finish if end of line
-(2) if '.'
-    next must be a '.'
-    finish
-(3) if ',' 
-    parse datalist
-    goto (1)
-(4) if not alpha: error
-(5) extract token
-(6) skip spaces
-(7) if '='
-    skip spaces
-    parse expression
-    save symbol
-    goto (1)
-(8) if ':'
-    save symbol
-    skip spaces, finish if end of line
-    (a) if ',' 
-        parse datalist
-        goto (1)
-    (b) extract token
-(9) token is directive
-    DC   -> parse datalist, goto (1)
-    ORG  -> parse expression, update pc, goto (1)
-    PAGE -> update pc, goto (1)
-    END  -> finish pass
-(10) token is instruction
-     parse operand
-     goto (1)
-(11) error
