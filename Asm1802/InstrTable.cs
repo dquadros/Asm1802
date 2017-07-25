@@ -98,7 +98,7 @@ namespace Asm1802
             it.Add("SHR",  new Instruction(0xF6, OperType.NONE, 1));
             it.Add("SHRC", new Instruction(0x76, OperType.NONE, 1));
             it.Add("RSHR", new Instruction(0x76, OperType.NONE, 1));
-            it.Add("SHL",  new Instruction(0xFC, OperType.NONE, 1));
+            it.Add("SHL",  new Instruction(0xFE, OperType.NONE, 1));
             it.Add("SHLC", new Instruction(0x7E, OperType.NONE, 1));
             it.Add("RSHL", new Instruction(0x7E, OperType.NONE, 1));
 

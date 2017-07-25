@@ -237,18 +237,163 @@ DELAY2: DEC AUX                 ..AUX.0 HOLDS BASIC
         DEC SUB                 ..POINT SUB AT
                                 ..DELAY POINTER
         BR DELAY2
-
+..
+..  ROUTINE TO CALCULATE BYTE TIME AND ECHO
+..  FLAG.  WAITS FOR LF(NO ECHO) OR CR(ECHO)
+..  TO BE TYPED IN. ALSO SETS UP POINTER TO
+..  DELAY ROUTINE.
+..  AUX.1 ENDS UP HOLDING, IN THE MOST
+..  SIGNIFICANT 7 BITS, THE DELAY CONSTANT.
+..  LEAST SIGNIFICANT BIT IS ZERO FOR ECHO,
+..  ONE FOR NO ECHO.
+..
+TIMALC: GHI SUB ;PHI DELAY
+        LDI A.0(DELAY1) ;PLO DELAY
+        LDI #00 ;PLO AUX ;PLO CHAR
+                                ..DELAY ROUT. READY
+        B4*                     ..WAIT START BIT
+        BN4*                    ..WAIT FOR FIRST
+                                ..NONZERO DATA BIT
+        LDI #03                 ..SET UP FOR 10
+                                ..EXECUTIONS SO
+                                ..ROUND-OFF MINIMAL
+TC2:    SMI #01
+        BNZ *-#02
+        GLO CHAR                ..LOOK TO SEE IF
+                                ..DATA CHANGED
+                               ..PREVIOUSLY
+        BNZ ZRONE               ..BR IF IT 6HAD
+        B4 INCR                 ..ELSE LOOK FOR
+                                ..CHANGE TO ZERO
+                                ..BRANCH IF NO
+        INC CHAR                ..YES, SET SWITCH
+ZRONE:  B4 DAUX                 ..LOOK FOR CHANGE
+                                ..TO 1, BR IF YES
+INCR:   INC AUX
+        LDI #07                 ..SET UP FOR 20
+                                ..INSTRUCTION LOOPS
+        BR TC2
+..
+..  AUX.0 NOW HOLDS #LOOPS IN 2 BIT TIMES
+..
+DAUX:   DEC AUX ;DEC AUX        ..REDUCE COUNT TO
+                                ..BALANCE FIXED
+                                ..OVERLOAD IN
+                                ..CALLING DELAY
+        GLO AUX ;ORI #01 ;PHI AUX..LSB AUX.1 = 1.5
+        SEP RC; ,#0C            ..BIT TIME DELAY
+        BN4 WAIT                ..BR IF LF(NO ECHO)
+                                ..LSB AUX.1=1
+        GHI AUX ;ANI#FE
+        PHI AUX                 ..CR(ECHO)
+                                ..LSB AUX.1=0
+WAIT:   SEP RC; ,#26
+        SEP R5
+..
+..
+..  READ ROUTINE--READS 1 BYTE INTO CHAR.1. WHEN
+..  ENTERED VIA READAH, THEN IN INPUT IS A HEX
+..  DIGIT ITS HEX VALUE IS SHIFTED INTO ASL FROM
+..  THE RIGHT AND DF=1, ELSE DF=0; CLOBBERS CHAR,
+..  AUX.0, (ASL ON READAH).  LEAVES BYTE IN D
+..  (BUT CLOVVERED IF SUBR LINKAGE IS USED).
+..  LEAVES PC AT READAH ENTRY POINT; EXITS TO R5
+..
+..
+..     WARNING: READ PROCESS HAS NOT FINISHED.  DO
+..     NOT TYPE IMMEDIATELY, OR ELSE ENTER TYPE VIA
+..     TYPE5D.
+..
+..
+CKDEC:  ADI #07                 ..CK FOR ASCII
+                                ..DECIMAL INPUT
+        BDF NFND
+        ADI #0A
+        BDF FND                 ..SUB NET 30
+NFND:   ADI #00                 ..SETS DF=0
+REXIT:  GHI CHAR                ..CHARACTER INTO D
+        SEP R5
+READAH: LDI #00
+        SKP                     ..SKIP OVER
+                                ..TO READ1
+READ:   GHI SUB                 ..CONSTANT WITH
+                                ..A VALUE > 0
+READ1:  PLO CHAR                ..SET ENTRY FLAG
+READ2:  LDI #80 ;PHI CHAR       ..INITIALIZE INPUT
+                                ..BYTE-WHEN SHIFTED
+                                ..80 IS 1, WILL BE
+                                ..DONE
+        SEX ST
+        BN4 *                   ..WAIT FOR END OF
+                                ..LAST DATA BIT
+        B4 *                    ..WAIT FOR PRESENT
+                                ..START BIT
+        SEP RC; ,#02            ..DELAY HALF
+                                ..BIT TIME
+..
+NObIT:  LDI #00 ;STR ST
+LOOP5:  GHI AUX ;ANI #01        ..CHECK IF ECHO
+                                ..INDICATOR IS
+                                ..LSB OF AUX.1
+        OR ;STR ST              ..OUTPUT IS ONE(NO
+                                ..EFFECT) ON NOECHO
+        OUT 7 ;DEC ST
+..
+LOOP5B: SEP RC; ,#07            ..DELAY ONE
+                                ..BIT TIME
+        LDI #01 ;STR ST
+        GHI CHAR ;SHR ;PHI CHAR ..SHIFT INPUT CHAR.
+        BDF NEXT                ..BR IF INPUT
+                                ..FINISHED D=CHAR.1
+        ORI #80
+        BN4 NOBIT               ..BR IF INPUT
+                                ..BIT A ZERO
+        PHI CHAR                ..ELSE PUT OK'D
+                                ..VALUE AWAY
+        BR LOOP5
+..
+..  NOW HAVE BYTE READ INTO CHAR.1
+..
+NEXT:   OUT 7; DEC ST           ..OUTPUT STOP BIT
+        BZ READ2                ..BR IF D=0,
+                                ..CHAR.1 IS A NULL
+        GLO CHAR                ..CHECK ENTRY FLAG
+        BNZ REXIT               ..BR IF ENTRY VIA
+                                ..READ
+CKHXE:  GHI CHAR
+        SMI #41                 ..CK FOR ASCII HEX
+        BNF CKDEC               ..AT TOP OF ROUTINE
+        SMI #06                 ..CK FOR A THRU F
+        BDF NFND
+        ADI #10                 ..SUB NET 37
+..
+FND:    PLO AUX                 ..SAVE TO SHIFT
+                                ..INTO ASL
+        GHI ASL
+        SHL ;SHL ;SHL ;SHL      ..SHIFT ASL.1
+                                ..LEFT FOUR
+        STR ST
+        GLO ASL
+        SHR ;SHR ;SHR ;SHR      ..SHIFT ASL.0 RT 4
+        OR ;PHI ASL             ..COMBINE
+        GLO ASL
+        SHL ;SHL ;SHL ;SHL      ..SHIFT ASL.0
+                                ..LEFT FOUR
+        STR ST
+        GLO AUX ;ANI #0F ;OR ;PLO ASL ..COMBINE
+        SMI #00                 ..SET DF
+        BR REXIT
+..
+..  TYPE ROUTINA -- TYPES 1 BYTE FROM @R5!, @R6!,
+        
 DOLLAR:
 
-TIMALC:
 
 TYPE2:
 
 TYPER:
 
 TYPE5D:
-
-READAH:
 
 FSYNER:
 
