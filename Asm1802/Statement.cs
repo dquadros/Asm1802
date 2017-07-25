@@ -341,6 +341,10 @@ namespace Asm1802
                             operand = Value;
                             opersize = ValueSize.TWO;
                         }
+                        else
+                        {
+                            Error = err;
+                        }
                         break;
                 }
 
@@ -515,7 +519,10 @@ namespace Asm1802
             int nbytes = 1;
 
             // check for A(sexpr), A.0(sexpr) and A.1(sexpr)
-            SkipSpace(ref pos);
+            if (SkipSpace(ref pos))
+            {
+                return StError.MISSING_EXPR;
+            }
             if ((char.ToUpper(text[pos]) == 'A') && (pos < (text.Length-1)))
             {
                 int aux = pos + 1;

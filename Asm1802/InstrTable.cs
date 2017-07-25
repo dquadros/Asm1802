@@ -151,13 +151,13 @@ namespace Asm1802
             // Skip
             it.Add("SKP",  new Instruction(0x38, OperType.NONE,  1));
             it.Add("LSKP", new Instruction(0xC8, OperType.NONE,  1));
-            it.Add("LSZ",  new Instruction(0xCE, OperType.LADDR, 3));
-            it.Add("LSNZ", new Instruction(0xC6, OperType.LADDR, 3));
-            it.Add("LSDF", new Instruction(0xCF, OperType.LADDR, 3));
-            it.Add("LSNF", new Instruction(0xC7, OperType.LADDR, 3));
-            it.Add("LSQ",  new Instruction(0xCD, OperType.LADDR, 3));
-            it.Add("LSNQ", new Instruction(0xC5, OperType.LADDR, 3));
-            it.Add("LSIE", new Instruction(0xCC, OperType.LADDR, 3));
+            it.Add("LSZ",  new Instruction(0xCE, OperType.NONE,  1));
+            it.Add("LSNZ", new Instruction(0xC6, OperType.NONE,  1));
+            it.Add("LSDF", new Instruction(0xCF, OperType.NONE,  1));
+            it.Add("LSNF", new Instruction(0xC7, OperType.NONE,  1));
+            it.Add("LSQ",  new Instruction(0xCD, OperType.NONE,  1));
+            it.Add("LSNQ", new Instruction(0xC5, OperType.NONE,  1));
+            it.Add("LSIE", new Instruction(0xCC, OperType.NONE,  1));
 
             // Control
             it.Add("IDL",  new Instruction(0x00, OperType.NONE, 1));

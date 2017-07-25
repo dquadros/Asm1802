@@ -90,7 +90,8 @@ namespace Asm1802
                     sbText.Append(c);
                     insideQuotes = true;
                 }
-                else if (Char.IsLetterOrDigit(c) || (c == '#'))
+                else if (Char.IsLetterOrDigit(c) || 
+                         ((sbText.Length == 0) &&(c == '#')))
                 {
                     sbText.Append(c);
                 }

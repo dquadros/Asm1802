@@ -239,14 +239,14 @@ namespace Asm1802
 
             foreach (Statement st in lstStatements)
             {
-                if (st.LineNum != sline)
+                while (st.LineNum != sline)
                 {
                     if (sline != 0)
                     {
                         // List previous line
                         ListLine(sline, linepc, objcode, lstErrors);
                     }
-                    sline = st.LineNum;
+                    sline++;
                     errcount += lstErrors.Count;
                     lstErrors = new List<string>();
                     linepc = pc;
